@@ -1,0 +1,22 @@
+name: GLM
+
+on:
+  schedule:
+    - cron: 0 * * * *
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Trigger GLM
+        id: GLM
+        uses: anomalyco/opencode/github@latest
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
+        with:
+          model: zai-coding-plan/glm-4.5-air
+          prompt: 1+1
