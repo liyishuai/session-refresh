@@ -44,14 +44,17 @@ jobs:
         if: env.SUCCESS != 'true'
         run: |
           set -e
-          # Update table row: | ![GLM](badge.svg) | ✅ | | -> | ![GLM](badge.svg) | ❌ | error message |
-          sed -i 's#^\(| !\[GLM\]([^)]*workflows/glm\.yml/badge\.svg)\) |[^|]*|[^|]*|$#\1 | ❌ | '"$GLM_ERROR_MSG"' |#' README.md
+          # Checkout gh-pages branch for README
+          git fetch origin gh-pages:gh-pages
+          git checkout gh-pages
+          # Update table row: | [![GLM](badge.svg)](url) | ✅ | | -> | [![GLM](badge.svg)](url) | ❌ | error message |
+          sed -i 's#^\(| \[!\[GLM\]([^)]*workflows/glm\.yml/badge\.svg)\][^)]*) |[^|]*|[^|]*|$#\1 | ❌ | '"$GLM_ERROR_MSG"' |#' README.md
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
           if ! git diff --staged --quiet; then
             git commit -m "Update README with GLM error"
-            git push
+            git push origin gh-pages
           fi
           # Exit with error if not 1308
           if [ "$GLM_ERROR" != "1308" ]; then
@@ -62,14 +65,17 @@ jobs:
         if: env.SUCCESS == 'true'
         run: |
           set -e
-          # Update table row: | ![GLM](badge.svg) | ❌ | error | -> | ![GLM](badge.svg) | ✅ | |
-          if grep -q "workflows/glm\.yml/badge\.svg) | ❌" README.md; then
-            sed -i 's#^\(| !\[GLM\]([^)]*workflows/glm\.yml/badge\.svg)\) | ❌ |[^|]*|$#\1 | ✅ | |#' README.md
+          # Checkout gh-pages branch for README
+          git fetch origin gh-pages:gh-pages
+          git checkout gh-pages
+          # Update table row: | [![GLM](badge.svg)](url) | ❌ | error | -> | [![GLM](badge.svg)](url) | ✅ | |
+          if grep -q "workflows/glm\.yml/badge\.svg)\] | ❌" README.md; then
+            sed -i 's#^\(| \[!\[GLM\]([^)]*workflows/glm\.yml/badge\.svg)\][^)]*) | ❌ |[^|]*|$#\1 | ✅ | |#' README.md
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add README.md
             if ! git diff --staged --quiet; then
               git commit -m "Clear GLM error from README"
-              git push
+              git push origin gh-pages
             fi
           fi
