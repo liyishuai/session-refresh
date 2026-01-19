@@ -23,50 +23,78 @@ jobs:
           max_turns: 1
           system_prompt: Result only
           model: haiku
-      - name: Update README on failure
-        if: steps.claude.outcome == 'failure'
+
+      - name: Parse result
+        id: result
         env:
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          OUTCOME: ${{ steps.claude.outcome }}
         run: |
-          set -e
-          # Checkout gh-pages branch for README
-          git fetch origin gh-pages:gh-pages
-          git checkout gh-pages
-          if [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
-            RESULT=$(jq -r 'if type == "array" then .[] else . end | select(.type == "result") | .result // empty' "$EXECUTION_FILE" | tail -1)
-            # Update table row: | ![Claude](badge.svg) | ✅ | | -> | ![Claude](badge.svg) | ❌ | error message |
-            sed -i 's#^\(| !\[Claude\]([^)]*workflows/claude\.yml/badge\.svg)\) |[^|]*|[^|]*|$#\1 | ❌ | '"$RESULT"' |#' README.md
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            if ! git diff --staged --quiet; then
-              git commit -m "Update README with Claude failure result"
-              git push origin gh-pages
-            fi
-            # Exit with error unless it's a spending cap issue
-            if [[ "$RESULT" != *"Spending cap reached"* ]]; then
-              echo "::error::Claude failed: $RESULT"
-              exit 1
-            fi
+          if [ "$OUTCOME" == "success" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "message=" >> $GITHUB_OUTPUT
           else
-            echo "::error::EXECUTION_FILE is not set or does not exist"
-            exit 1
+            MESSAGE=""
+            if [ -n "${EXECUTION_FILE:-}" ] && [ -f "$EXECUTION_FILE" ]; then
+              MESSAGE=$(jq -r 'if type == "array" then .[] else . end | select(.type == "result") | .result // empty' "$EXECUTION_FILE" | tail -1)
+            fi
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "message=$MESSAGE" >> $GITHUB_OUTPUT
           fi
-      - name: Clear README on success
-        if: steps.claude.outcome == 'success'
+
+      - name: Checkout gh-pages
         run: |
-          set -e
-          # Checkout gh-pages branch for README
           git fetch origin gh-pages:gh-pages
           git checkout gh-pages
-          # Update table row: | ![Claude](badge.svg) | ❌ | error | -> | ![Claude](badge.svg) | ✅ | |
-          if grep -q "workflows/claude\.yml/badge\.svg) | ❌" README.md; then
-            sed -i 's#^\(| !\[Claude\]([^)]*workflows/claude\.yml/badge\.svg)\) | ❌ |[^|]*|$#\1 | ✅ | |#' README.md
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add README.md
-            if ! git diff --staged --quiet; then
-              git commit -m "Clear Claude failure result from README"
-              git push origin gh-pages
-            fi
+
+      - name: Fetch template from master
+        run: |
+          git checkout origin/master -- templates/README.mustache
+
+      - name: Update status with jq
+        env:
+          SUCCESS: ${{ steps.result.outputs.success }}
+          MESSAGE: ${{ steps.result.outputs.message }}
+        run: |
+          [ -f status.json ] || echo '{"services":[]}' > status.json
+          jq --arg key "claude" \
+             --arg name "Claude" \
+             --arg badge "${{ github.server_url }}/${{ github.repository }}/actions/workflows/claude.yml/badge.svg" \
+             --arg usage "https://claude.ai/settings/usage" \
+             --argjson success "$SUCCESS" \
+             --arg timestamp "$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" \
+             --arg job_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+             --arg message "$MESSAGE" \
+             '(.services |= ([{
+               key: $key, name: $name, badge_url: $badge, usage_url: $usage,
+               success: $success, timestamp: $timestamp, job_url: $job_url, message: $message
+             }] + map(select(.key != $key))))' status.json > tmp.json && mv tmp.json status.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: latest
+
+      - name: Render README with mustache
+        run: npx mustache status.json templates/README.mustache > README.md
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add status.json README.md
+          if ! git diff --staged --quiet; then
+            git commit -m "Update Claude status"
+            git push origin gh-pages
+          fi
+
+      - name: Fail on error
+        env:
+          SUCCESS: ${{ steps.result.outputs.success }}
+          MESSAGE: ${{ steps.result.outputs.message }}
+        if: env.SUCCESS != 'true'
+        run: |
+          if [[ "$MESSAGE" != *"Spending cap reached"* ]]; then
+            echo "::error::Claude failed: $MESSAGE"
+            exit 1
           fi
