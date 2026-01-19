@@ -12,6 +12,9 @@ jobs:
       id-token: write
       contents: write
     steps:
+      - uses: szenius/set-timezone@v2.0
+        with:
+          timezoneLinux: "Asia/Shanghai"
       - uses: actions/checkout@v6
       - name: Trigger Claude
         id: claude
@@ -62,7 +65,7 @@ jobs:
              --arg badge "${{ github.server_url }}/${{ github.repository }}/actions/workflows/claude.yml/badge.svg" \
              --arg usage "https://claude.ai/settings/usage" \
              --argjson success "$SUCCESS" \
-             --arg timestamp "$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" \
+             --arg timestamp "$(date +'%Y-%m-%d %H:%M:%S')" \
              --arg job_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
              --arg message "$MESSAGE" \
              '(.services |= ([{

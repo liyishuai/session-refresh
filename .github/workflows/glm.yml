@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: szenius/set-timezone@v2.0
+        with:
+          timezoneLinux: "Asia/Shanghai"
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v4
         with:
@@ -57,7 +60,7 @@ jobs:
              --arg badge "${{ github.server_url }}/${{ github.repository }}/actions/workflows/glm.yml/badge.svg" \
              --arg usage "https://bigmodel.cn/usercenter/glm-coding/usage" \
              --argjson success "$SUCCESS" \
-             --arg timestamp "$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S')" \
+             --arg timestamp "$(date +'%Y-%m-%d %H:%M:%S')" \
              --arg job_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
              --arg message "$MESSAGE" \
              '(.services |= ([{
